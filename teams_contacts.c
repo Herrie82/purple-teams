@@ -2258,6 +2258,10 @@ teams_lookup_buddy_list_contacts(TeamsAccount *sa)
 			}
 			
 			name = purple_buddy_get_name(buddy);
+			// a blocked contact gets no profile or presence subscription, as in the roster parse
+			if (!purple_account_privacy_check(sa->account, name)) {
+				continue;
+			}
 			users_to_fetch = g_slist_prepend(users_to_fetch, g_strdup(name));
 		}
 	}
@@ -2698,9 +2702,12 @@ teams_got_skype_contacts_cb(TeamsAccount *sa, JsonNode *node, gpointer user_data
 
 		teams_get_icon(buddy);
 
+		/* The roster is the server's block list: a contact unblocked elsewhere must
+		 * not stay on our deny list. local_only: this mirrors the server, nothing to send. */
 		if (blocked) {
 			purple_account_privacy_deny_add(sa->account, id, TRUE);
 		} else {
+			purple_account_privacy_deny_remove(sa->account, id, TRUE);
 			users_to_fetch = g_slist_prepend(users_to_fetch, sbuddy->skypename);
 		}
 	}

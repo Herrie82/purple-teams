@@ -488,12 +488,6 @@ process_message_resource(TeamsAccount *sa, JsonObject *resource)
 	if (json_object_has_member(resource, "clientmessageid"))
 		clientmessageid = json_object_get_string_member(resource, "clientmessageid");
 	
-	if (clientmessageid && *clientmessageid && g_hash_table_remove(sa->sent_messages_hash, clientmessageid)) {
-		// We sent this message from here already
-		g_strfreev(messagetype_parts);
-		return;
-	}
-
 	/* The edit marker: properties.edittime, or else skypeeditedid. The dedup key below and
 	 * the edit handling further down both use it. */
 	if (json_object_has_member(resource, "skypeeditedid")) {
@@ -539,6 +533,14 @@ process_message_resource(TeamsAccount *sa, JsonObject *resource)
 				g_hash_table_remove_all(sa->received_messages_hash);
 			g_hash_table_insert(sa->received_messages_hash, dedup_key, dedup_key); /* not g_hash_table_add: GLib 2.28 on Win32 */
 		}
+	}
+
+	/* After the dedup above, so the echo of a message we sent has its key recorded too and a
+	 * later poll that fetches it again drops it there. */
+	if (clientmessageid && *clientmessageid && g_hash_table_remove(sa->sent_messages_hash, clientmessageid)) {
+		// We sent this message from here already
+		g_strfreev(messagetype_parts);
+		return;
 	}
 	
 	if (properties != NULL) {
@@ -2012,7 +2014,10 @@ teams_got_all_convs(TeamsAccount *sa, JsonNode *node, gpointer user_data)
 			// Check if it's a one-to-one before we fetch history
 			process_conversation_resource(sa, conversation);
 			
-			if (composetimestamp > since) {
+			// >=: the cursor is in whole seconds, so another message can share its second.
+			// The history request starts at the cursor's second, and the dedup in
+			// process_message_resource() drops what was already shown.
+			if (composetimestamp >= since) {
 				teams_get_conversation_history_since(sa, id, since);
 			}
 		}
