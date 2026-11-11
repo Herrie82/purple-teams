@@ -925,6 +925,18 @@ teams_xfer_send_done(PurpleHttpConnection *conn, PurpleHttpResponse *resp, gpoin
 	purple_debug_info("teams", "Finished [%d]: %s\n", code, error);
 	purple_debug_info("teams", "Server message: %s\n", data);
 
+	if (swft->is_image && !purple_http_response_is_successful(resp)) {
+		// the upload failed: there is nothing for the recipient to fetch, so don't send the
+		// picture. purple_xfer_cancel_local() frees swft through the cancel_send callback
+		// (teams_free_xfer); then drop our reference as the success path below does.
+		PurpleXfer *xfer = swft->xfer;
+		purple_xfer_error(purple_xfer_get_xfer_type(xfer), swft->sa->account, swft->from,
+			error ? error : _("Failed to upload the image"));
+		purple_xfer_cancel_local(xfer);
+		purple_xfer_unref(xfer);
+		return;
+	}
+
 	if (swft->is_image) {
 		// the image content is uploaded -> send it as an inline AMSImage <img> now, exactly like
 		// the paste-an-image path (teams_conversation_send_image_part2_cb) -- no status poll. The
