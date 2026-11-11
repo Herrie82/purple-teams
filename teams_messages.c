@@ -1952,6 +1952,11 @@ teams_got_all_convs(TeamsAccount *sa, JsonNode *node, gpointer user_data)
 	JsonArray *conversations;
 	gint index, length;
 	
+	// bail on a late conversation list for an account freed by a re-login flap: the loop below
+	// fetches history with sa, past process_conversation_resource()'s own check.
+	if (!teams_account_is_live(sa))
+		return;
+	
 	if (node == NULL || json_node_get_node_type(node) != JSON_NODE_OBJECT)
 		return;
 	obj = json_node_get_object(node);
