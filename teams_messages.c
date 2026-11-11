@@ -1806,7 +1806,9 @@ teams_got_conv_history(TeamsAccount *sa, JsonNode *node, gpointer user_data)
 		const gchar *composetime = json_object_get_string_member(message, "composetime");
 		gint composetimestamp = (gint) purple_str_to_time(composetime, TRUE, NULL, NULL, NULL);
 		
-		if (composetimestamp > since) {
+		// >=, as in teams_got_all_convs(): the cursor is in whole seconds, and the dedup in
+		// process_message_resource() drops a message from that second that was already shown.
+		if (composetimestamp >= since) {
 			process_message_resource(sa, message);
 		}
 	}
