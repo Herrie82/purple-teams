@@ -519,7 +519,27 @@ process_message_resource(TeamsAccount *sa, JsonObject *resource)
 				dedup_id = g_strdup(sid);
 		}
 		if (dedup_id != NULL) {
-			gchar *dedup_key = g_strdup_printf("%s|%s", dedup_id, skypeeditedid ? skypeeditedid : "");
+			/* sequenceId counts within one conversation, so the key names it. A delete or a
+			 * reaction (a MessageUpdate of the same message, often with no new edittime)
+			 * changes the key too, so it is not dropped as a repeat. */
+			const gchar *dedup_conv = conversationLink ? teams_thread_url_to_name(conversationLink) : NULL;
+			GString *update = g_string_new(NULL);
+			if (properties != NULL && json_object_has_member(properties, "deletetime"))
+				g_string_append(update, "deleted");
+			if (properties != NULL && json_object_has_member(properties, "emotions")) {
+				JsonArray *emotions = json_object_get_array_member(properties, "emotions");
+				guint e, elen = emotions ? json_array_get_length(emotions) : 0;
+				for (e = 0; e < elen; e++) {
+					JsonObject *emotion = json_array_get_object_element(emotions, e);
+					JsonArray *users = emotion ? json_object_get_array_member(emotion, "users") : NULL;
+					g_string_append_printf(update, ",%s:%u",
+						emotion ? json_object_get_string_member(emotion, "key") : "",
+						users ? json_array_get_length(users) : 0);
+				}
+			}
+			gchar *dedup_key = g_strdup_printf("%s|%s|%s|%s", dedup_conv ? dedup_conv : "", dedup_id,
+				skypeeditedid ? skypeeditedid : "", update->str);
+			g_string_free(update, TRUE);
 			g_free(dedup_id);
 			if (g_hash_table_contains(sa->received_messages_hash, dedup_key)) {
 				g_free(dedup_key);

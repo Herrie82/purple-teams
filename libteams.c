@@ -665,23 +665,15 @@ teams_login(PurpleAccount *account)
 		 * EMPTY stored password before login is even called, so accounts may store a
 		 * non-empty sentinel instead.)
 		 *
-		 * Personal/TFL priority: (1) a refresh_token persisted from a previous
-		 * successful login -> silent refresh (this also means a one-shot "webauth:"
-		 * auth code is never replayed after it has been exchanged once); else
-		 * (2) a "webauth:" auth-code URL -> exchange it for tokens; else
-		 * (3) the interactive device-code flow. */
-		gchar *saved_refresh = teams_load_refresh_token_password(account);
-		if (saved_refresh && *saved_refresh) {
-			sa->refresh_token = saved_refresh; /* take ownership */
-			purple_debug_info("teams", "Using persisted refresh_token for silent login\n");
-			purple_connection_update_progress(pc, _("Authenticating"), 1, 3);
-			teams_oauth_refresh_token(sa);
-		} else if (password && g_str_has_prefix(password, "webauth:")) {
-			g_free(saved_refresh);
+		 * Personal/TFL: (1) a "webauth:" auth-code URL -> exchange it for tokens; else
+		 * (2) the interactive device-code flow. A refresh_token saved by an earlier
+		 * login is the password itself and takes the branch above; that is also why a
+		 * one-shot "webauth:" code is never replayed: once exchanged, the password is
+		 * overwritten with the refresh_token. */
+		if (password && g_str_has_prefix(password, "webauth:")) {
 			purple_debug_info("teams", "Using webauth auth-code from OAuth browser\n");
 			teams_do_authcode_login(sa, password + strlen("webauth:"));
 		} else {
-			g_free(saved_refresh);
 			teams_do_devicecode_login(sa);
 		}
 	}
@@ -818,6 +810,7 @@ teams_close(PurpleConnection *pc)
 	g_free(sa->substrate_access_token);
 	g_free(sa->csa_access_token);
 	g_free(sa->presence_access_token);
+	g_free(sa->mt_access_token);
 	g_free(sa->id_token);
 	g_free(sa->refresh_token);
 	g_free(sa->region);
