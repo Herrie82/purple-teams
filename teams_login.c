@@ -295,11 +295,15 @@ teams_oauth_refreshed_skypetoken_access(PurpleHttpConnection *http_conn, PurpleH
 	}
 }
 
+static void teams_oauth_refresh_services(TeamsAccount *sa);
+
 /* Handles the token endpoint's answer to both a refresh_token grant and an
- * authorization_code grant. from_auth_code says which one was sent. */
-static void
+ * authorization_code grant. from_auth_code says which one was sent. Returns
+ * TRUE when the tokens were stored. */
+static gboolean
 teams_oauth_token_response(PurpleHttpResponse *response, TeamsAccount *sa, gboolean from_auth_code)
 {
+	gboolean ok = FALSE;
 	JsonObject *obj;
 	const gchar *raw_response;
 	gsize response_len;
@@ -325,6 +329,7 @@ teams_oauth_token_response(PurpleHttpResponse *response, TeamsAccount *sa, gbool
 			purple_account_set_remember_password(account, TRUE);
 			teams_save_refresh_token_password(account, sa->refresh_token);
 		}
+		ok = TRUE;
 	} else {
 		if (obj != NULL) {
 			if (json_object_has_member(obj, "error")) {
@@ -353,6 +358,7 @@ teams_oauth_token_response(PurpleHttpResponse *response, TeamsAccount *sa, gbool
 	}
 
 	json_object_unref(obj);
+	return ok;
 }
 
 static void
@@ -366,7 +372,10 @@ static void
 teams_oauth_with_authcode_cb(PurpleHttpConnection *http_conn, PurpleHttpResponse *response, gpointer user_data)
 {
 	(void) http_conn;
-	teams_oauth_token_response(response, user_data, TRUE);
+	/* A refresh asks for the service tokens itself (teams_oauth_refresh_token); after
+	 * redeeming an authorization code nothing else would, as the device-code login does. */
+	if (teams_oauth_token_response(response, user_data, TRUE))
+		teams_oauth_refresh_services(user_data);
 }
 
 static void
